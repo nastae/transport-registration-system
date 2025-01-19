@@ -1,0 +1,98 @@
+Java programavimo užduotis
+
+Užduotis: Transporto priemonės registracijos ir savininko pakeitimo paslaugos sukūrimas
+
+Jūs turite sukurti web paslaugą, kuri valdytų transporto priemonių registraciją, paiešką ir savininkų perleidimą. Ši paslauga leis vartotojams registruoti transporto priemones, gauti transporto priemonės detales ir atlikti savininko perėjimą kai transporto priemonė perduodama kitam asmeniui (pvz parduodama).
+
+Šiai užduočiai atlikti naudokite Spring Boot ir Java 11 arba naujesne versija. Kaip duomenų bazę galima naudoti H2 atminties duomenų bazę, darbui su ja naudokite Hibernate.
+
+Reikalavimai
+Web servisas turėtų turėti tokius prieigos taškus (endpoints)
+
+
+POST /vehicles/register
+
+Aprašymas: Registruoti naują transporto priemonę.
+Užklausa:
+{
+  "plateNo": "ABC123",
+  "make": "Toyota",
+  "model": "Corolla",
+  "year": 2020,
+  "ownerName": "Jonas", -- naudojamas fiziniams asmenims
+  "ownerSurname": "Petrauskas", -- naudojamas fiziniams asmenims
+  "ownerLegalName": null, -- naudojamas juridiniams asmenims
+  "ownerCode": "39601010000" -- asmens arba įmonės kodas
+}
+Atsakymas:
+{
+  "message": "Transporto priemonė sėkmingai užregistruota",
+  "vehicleId": 1
+}
+
+
+GET /vehicles/{vehicleId}
+
+Aprašymas: Gauti specifinės transporto priemonės detales pagal vehicleId.
+Atsakymas:
+{
+  "vehicleId": 1,
+  "plateNo": "ABC123",
+  "make": "Toyota",
+  "model": "Corolla",
+  "year": 2020,
+  "ownerName": "Jonas",
+  "ownerSurname": "Petrauskas",
+  "ownerLegalName": null,
+  "ownerCode": "39601010000" 
+}
+
+
+POST /vehicles/{vehicleId}/transfer-owner
+
+Aprašymas: Perduoda transporto priemonės savininkystę naujam savininkui.
+Užklausa:
+{
+  "newOwnerName": "Petras",
+  "newOwnerSurname": "Petraitis",
+  "newOwnerLegalName": "UAB Petras",
+  "newOwnerCode": "39601010000" 
+}
+Atsakymas:
+{
+  "message": "Transporto priemonės savininkystė sėkmingai perleista",
+  "vehicleId": 1
+}
+
+
+DELETE /vehicles/{vehicleId}
+
+Aprašymas: Pašalina transporto priemonę pagal vehicleId.
+Atsakymas:
+{
+  "message": "Transporto priemonė sėkmingai pašalinta",
+  "vehicleId": 1
+}
+
+Transporto priemonės registracijos validacija:
+Užtikrinkite, kad plateNo būtų unikalus prieš registruojant naują transporto priemonę. Jei transporto priemonė su tokiu plateNo jau egzistuoja, grąžinkite 400 Bad Request su žinute kaip "Transporto priemonė su šiais numeriais jau egzistuoja".
+Užtikrinkite, kad visi būtini laukai būtų pateikti ir galiojantys registruojant naują transporto priemonę
+
+Savininkystės perėjimas:
+Užtikrinkite, kad transporto priemonė turi esamą savininką, kad galėtų būti perleista.
+Perleidimo metu, turėtų išlikti istorija apie buvusį savininką.
+Jei transporto priemonė neegzistuoja arba esamas savininkas nerastas, grąžinkite 404 Not Found klaidą su atitinkama žinute.
+Užtikrinkite, kad vehicleId savininkystės perėjimo užklausoje atitiktų esamą transporto priemonę sistemoje.
+
+Transporto priemonės pašalinimas:
+Užtikrinkite, kad kai transporto priemonė bus pašalinta, sistema ją duomenų bazėje pažymės, kaip negaliojantį, ir jei transporto priemonė neegzistuoja, grąžins 404 Not Found.
+Duomenų bazės sluoksnis
+
+Kodas turėtų būti padengtas unit testais, programuodami vadovaukitės gerosiomis programavimo praktikomis.
+
+Bonus užduotys:
+Įdiegti Swagger automatinį API dokumentavimą.
+Sukurkite transporto priemonių sąrašo endpoint panaudojant puslapiavimo mechanizmą.
+
+Jei susiduriate su sunkumais ar reikia paaiškinimo - klauskite.
+Sėkmės!
