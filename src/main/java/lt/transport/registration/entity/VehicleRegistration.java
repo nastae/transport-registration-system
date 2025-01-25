@@ -1,10 +1,28 @@
 package lt.transport.registration.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
 
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Getter
+@Setter
 @Entity
 @Table(name = "vehicle_registration", indexes = {
         @Index(name = "idx_plate_no", columnList = "plateNo", unique = true)
@@ -44,123 +62,4 @@ public class VehicleRegistration {
 
     @Column(name = "is_deleted")
     private boolean isDeleted;
-
-    public VehicleRegistration() {
-    }
-
-    public VehicleRegistration(String plateNo, String make, String model, Integer year, String ownerName, String ownerSurname, String ownerLegalName, String ownerCode) {
-        this.plateNo = plateNo;
-        this.make = make;
-        this.model = model;
-        this.year = year;
-        this.ownerName = ownerName;
-        this.ownerSurname = ownerSurname;
-        this.ownerLegalName = ownerLegalName;
-        this.ownerCode = ownerCode;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getPlateNo() {
-        return plateNo;
-    }
-
-    public void setPlateNo(String plateNo) {
-        this.plateNo = plateNo;
-    }
-
-    public String getMake() {
-        return make;
-    }
-
-    public void setMake(String make) {
-        this.make = make;
-    }
-
-    public String getModel() {
-        return model;
-    }
-
-    public void setModel(String model) {
-        this.model = model;
-    }
-
-    public Integer getYear() {
-        return year;
-    }
-
-    public void setYear(Integer year) {
-        this.year = year;
-    }
-
-    public String getOwnerName() {
-        return ownerName;
-    }
-
-    public void setOwnerName(String ownerName) {
-        this.ownerName = ownerName;
-    }
-
-    public String getOwnerSurname() {
-        return ownerSurname;
-    }
-
-    public void setOwnerSurname(String ownerSurname) {
-        this.ownerSurname = ownerSurname;
-    }
-
-    public String getOwnerLegalName() {
-        return ownerLegalName;
-    }
-
-    public void setOwnerLegalName(String ownerLegalName) {
-        this.ownerLegalName = ownerLegalName;
-    }
-
-    public String getOwnerCode() {
-        return ownerCode;
-    }
-
-    public void setOwnerCode(String ownerCode) {
-        this.ownerCode = ownerCode;
-    }
-
-    public List<VehicleOwnershipHistory> getOwnershipHistory() {
-        return ownershipHistory;
-    }
-
-    public void setOwnershipHistory(List<VehicleOwnershipHistory> ownershipHistory) {
-        this.ownershipHistory = ownershipHistory;
-    }
-
-    public boolean isDeleted() {
-        return isDeleted;
-    }
-
-    public void setDeleted(boolean deleted) {
-        isDeleted = deleted;
-    }
-
-    @Override
-    public String toString() {
-        return "VehicleRegistration{" +
-                "id=" + id +
-                ", plateNo='" + plateNo + '\'' +
-                ", make='" + make + '\'' +
-                ", model='" + model + '\'' +
-                ", year=" + year +
-                ", ownerName='" + ownerName + '\'' +
-                ", ownerSurname='" + ownerSurname + '\'' +
-                ", ownerLegalName='" + ownerLegalName + '\'' +
-                ", ownerCode='" + ownerCode + '\'' +
-                ", ownershipHistory=" + ownershipHistory +
-                ", isDeleted=" + isDeleted +
-                '}';
-    }
 }

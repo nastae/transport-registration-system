@@ -1,9 +1,9 @@
 package lt.transport.registration.service;
 
 import jakarta.transaction.Transactional;
-import lt.transport.registration.DTO.VehicleRegistrationDetailsResponse;
-import lt.transport.registration.DTO.VehicleRegistrationPageResponse;
-import lt.transport.registration.DTO.VehicleRegistrationRequest;
+import lt.transport.registration.dto.VehicleRegistrationDetailsResponse;
+import lt.transport.registration.dto.VehicleRegistrationPageResponse;
+import lt.transport.registration.dto.VehicleRegistrationRequest;
 import lt.transport.registration.entity.VehicleOwnershipHistory;
 import lt.transport.registration.entity.VehicleRegistration;
 import lt.transport.registration.exception.PlateNoAlreadyExistsException;
@@ -11,6 +11,8 @@ import lt.transport.registration.exception.VehicleNotFoundException;
 import lt.transport.registration.mapper.VehicleRegistrationMapper;
 import lt.transport.registration.repository.VehicleOwnershipHistoryRepository;
 import lt.transport.registration.repository.VehicleRegistrationRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,70 +20,64 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
+import java.time.LocalDateTime;
 
-import static lt.transport.registration.constants.ResponseMessages.*;
+import static lt.transport.registration.constants.ResponseMessages.CURRENT_OWNER_OF_THE_VEHICLE_NOT_FOUND;
+import static lt.transport.registration.constants.ResponseMessages.PLATE_NO_ALREADY_EXISTS;
+import static lt.transport.registration.constants.ResponseMessages.VEHICLE_NOT_FOUND;
 
 @Service
 public class VehicleRegistrationService {
 
-    private final VehicleRegistrationRepository repository;
+    private final VehicleRegistrationRepository vehicleRegistrationRepository;
 
-    private final VehicleOwnershipHistoryRepository historyRepository;
+    private final VehicleOwnershipHistoryRepository vehicleOwnershipHistoryRepository;
+
+    private static final Logger logger = LoggerFactory.getLogger(VehicleRegistrationService.class);
 
     @Autowired
-    public VehicleRegistrationService(VehicleRegistrationRepository repository, VehicleOwnershipHistoryRepository historyRepository) {
-        this.repository = repository;
-        this.historyRepository = historyRepository;
+    public VehicleRegistrationService(VehicleRegistrationRepository vehicleRegistrationRepository, VehicleOwnershipHistoryRepository vehicleOwnershipHistoryRepository) {
+        this.vehicleRegistrationRepository = vehicleRegistrationRepository;
+        this.vehicleOwnershipHistoryRepository = vehicleOwnershipHistoryRepository;
     }
 
-    public VehicleRegistration save(VehicleRegistrationRequest vehicleRegistrationRequest) {
-        if (vehicleRegistrationRequest == null) {
-            throw new IllegalArgumentException(REQUEST_BODY_CANNOT_BE_NULL);
-        }
-        if (vehicleRegistrationRequest.getPlateNo() == null || vehicleRegistrationRequest.getPlateNo().isEmpty()) {
-            throw new IllegalArgumentException(PLATE_NO_IS_REQUIRED);
-        }
-        if (vehicleRegistrationRequest.getMake() == null || vehicleRegistrationRequest.getMake().isEmpty()) {
-            throw new IllegalArgumentException(MAKE_IS_REQUIRED);
-        }
-        if (vehicleRegistrationRequest.getModel() == null || vehicleRegistrationRequest.getModel().isEmpty()) {
-            throw new IllegalArgumentException(MODEL_IS_REQUIRED);
-        }
-        if (vehicleRegistrationRequest.getYear() == null) {
-            throw new IllegalArgumentException(YEAR_IS_REQUIRED);
-        }
-        if (vehicleRegistrationRequest.getOwnerName() == null || (vehicleRegistrationRequest.getOwnerName() != null && vehicleRegistrationRequest.getOwnerName().isEmpty())) {
-            throw new IllegalArgumentException(OWNER_NAME_IS_REQUIRED);
-        }
-        if (vehicleRegistrationRequest.getOwnerSurname() == null || (vehicleRegistrationRequest.getOwnerSurname() != null && vehicleRegistrationRequest.getOwnerSurname().isEmpty())) {
-            throw new IllegalArgumentException(OWNER_SURNAME_IS_REQUIRED);
-        }
-        if (vehicleRegistrationRequest.getOwnerCode() == null || vehicleRegistrationRequest.getOwnerCode().isEmpty()) {
-            throw new IllegalArgumentException(OWNER_CODE_IS_REQUIRED);
-        }
-
-        Optional<VehicleRegistration> existingVehicle = repository.findByPlateNoIgnoreCaseAndNotDeleted(vehicleRegistrationRequest.getPlateNo());
-
-        if (existingVehicle.isPresent()) {
+    public VehicleRegistration saveVehicleRegistration(VehicleRegistrationRequest vehicleRegistrationRequest) {
+        logger.info("Attempting to save vehicle registration for plateNo: {}", vehicleRegistrationRequest.plateNo());
+        if (vehicleRegistrationRepository.findVehicleRegistrationByPlateNoIgnoreCaseAndIsDeletedFalse(vehicleRegistrationRequest.plateNo()).isPresent()) {
+            logger.error("Plate number {} already exists in the system", vehicleRegistrationRequest.plateNo());
             throw new PlateNoAlreadyExistsException(PLATE_NO_ALREADY_EXISTS);
         }
 
-        return repository.save(VehicleRegistrationMapper.toEntity(vehicleRegistrationRequest));
+        VehicleRegistration vehicleRegistration = VehicleRegistrationMapper.INSTANCE.toEntity(vehicleRegistrationRequest);
+        vehicleRegistration.setPlateNo(vehicleRegistration.getPlateNo().toLowerCase());
+        logger.debug("Mapped VehicleRegistration entity: {}", vehicleRegistration);
+
+        VehicleRegistration savedVehicleRegistration = vehicleRegistrationRepository.save(vehicleRegistration);
+        logger.info("Vehicle registration saved successfully with ID: {}", savedVehicleRegistration.getId());
+        return savedVehicleRegistration;
     }
 
-    public VehicleRegistrationDetailsResponse findById(Long id) {
-        Optional<VehicleRegistration> vehicleRegistration = repository.findByIdAndIsDeletedFalse(id);
-        if (vehicleRegistration.isEmpty()) {
-            throw new VehicleNotFoundException(String.format(VEHICLE_NOT_FOUND, id));
-        }
-        return VehicleRegistrationMapper.toDto(vehicleRegistration.get());
+    public VehicleRegistrationDetailsResponse findVehicleRegistrationById(Long id) {
+        logger.info("Searching for vehicle registration with ID: {}", id);
+         return vehicleRegistrationRepository.findVehicleRegistrationByIdAndIsDeletedFalse(id)
+                .map(v -> {
+                    logger.info("Vehicle registration found with ID: {}", id);
+                    return VehicleRegistrationMapper.INSTANCE.toDto(v);
+                })
+                .orElseThrow(() -> {
+                    logger.error("Vehicle registration with ID {} not found", id);
+                    return new VehicleNotFoundException(String.format(VEHICLE_NOT_FOUND, id));
+                });
     }
 
-    public VehicleRegistrationPageResponse findAll(int page, int size, String sortBy, String sortDirection) {
+    public VehicleRegistrationPageResponse findAllVehicleRegistrations(int page, int size, String sortBy, String sortDirection) {
+        logger.info("Searching for all vehicle registrations. Page: {}, Size: {}, Sort by: {}, Sort direction: {}", page, size, sortBy, sortDirection);
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
-        Page<VehicleRegistrationDetailsResponse> vehicleRegistrations = repository.findAllNotDeleted(pageable).map(VehicleRegistrationMapper::toDto);
+        Page<VehicleRegistrationDetailsResponse> vehicleRegistrations = vehicleRegistrationRepository.findVehicleRegistrationByIsDeletedFalse(pageable).map(VehicleRegistrationMapper.INSTANCE::toDto);
+        logger.info("Found {} vehicle registrations on page {} out of {} pages. Total records: {}",
+                vehicleRegistrations.getContent().size(), page, vehicleRegistrations.getTotalPages(), vehicleRegistrations.getTotalElements());
+
         return new VehicleRegistrationPageResponse(
                 vehicleRegistrations.getContent(),
                 page,
@@ -92,57 +88,57 @@ public class VehicleRegistrationService {
     }
 
     @Transactional
-    public VehicleRegistration transferOwner(Long vehicleId, String newOwnerName, String newOwnerSurname, String newOwnerLegalName,
-                                             String newOwnerCode) {
-        if (newOwnerName == null || newOwnerName.isEmpty()) {
-            throw new IllegalArgumentException(OWNER_NAME_IS_REQUIRED);
-        }
-        if (newOwnerSurname == null || newOwnerSurname.isEmpty()) {
-            throw new IllegalArgumentException(OWNER_SURNAME_IS_REQUIRED);
-        }
-        if (newOwnerCode == null || newOwnerCode.isEmpty()) {
-            throw new IllegalArgumentException(OWNER_CODE_IS_REQUIRED);
-        }
+    public VehicleRegistration transferOwnerOfVehicleRegistration(Long vehicleId, String newOwnerName, String newOwnerSurname, String newOwnerLegalName,
+                                                                  String newOwnerCode) {
+        logger.info("Starting transfer of ownership of vehicle registration with ID: {}", vehicleId);
+        VehicleRegistration vehicleRegistration = vehicleRegistrationRepository.findVehicleRegistrationByIdAndIsDeletedFalse(vehicleId)
+                .orElseThrow(() -> {
+                    logger.error("Vehicle registration with ID {} not found", vehicleId);
+                    return new VehicleNotFoundException(String.format(VEHICLE_NOT_FOUND, vehicleId));
+                });
 
-        Optional<VehicleRegistration> vehicleOptional = repository.findByIdAndIsDeletedFalse(vehicleId);
-
-        if (vehicleOptional.isEmpty()) {
-            throw new VehicleNotFoundException(String.format(VEHICLE_NOT_FOUND, vehicleId));
-        }
-
-        VehicleRegistration vehicleRegistration = vehicleOptional.get();
-        if ((vehicleRegistration.getOwnerName() == null || (vehicleRegistration.getOwnerName() != null && vehicleRegistration.getOwnerName().isEmpty()))
-                || (vehicleRegistration.getOwnerSurname() == null || (vehicleRegistration.getOwnerSurname() != null && vehicleRegistration.getOwnerSurname().isEmpty()))
-                || (vehicleRegistration.getOwnerCode() == null || vehicleRegistration.getOwnerCode() != null && (vehicleRegistration.getOwnerCode().isEmpty()))) {
+        if ((vehicleRegistration.getOwnerName() == null ||  vehicleRegistration.getOwnerName().isEmpty())
+                || (vehicleRegistration.getOwnerSurname() == null || vehicleRegistration.getOwnerSurname().isEmpty())
+                || (vehicleRegistration.getOwnerCode() == null || vehicleRegistration.getOwnerCode().isEmpty())) {
+            logger.error("Current owner details not found for vehicle registration ID {}", vehicleId);
             throw new IllegalStateException(CURRENT_OWNER_OF_THE_VEHICLE_NOT_FOUND);
         }
-        VehicleOwnershipHistory history = new VehicleOwnershipHistory(
-                vehicleRegistration,
-                vehicleRegistration.getOwnerName(),
-                vehicleRegistration.getOwnerSurname(),
-                vehicleRegistration.getOwnerLegalName(),
-                vehicleRegistration.getOwnerCode()
-        );
+        VehicleOwnershipHistory history = VehicleOwnershipHistory.builder()
+                .vehicleRegistration(vehicleRegistration)
+                .ownerName(vehicleRegistration.getOwnerName())
+                .ownerSurname(vehicleRegistration.getOwnerSurname())
+                .ownerLegalName(vehicleRegistration.getOwnerLegalName())
+                .ownerCode(vehicleRegistration.getOwnerCode())
+                .transferDate(LocalDateTime.now())
+                .build();
+        logger.info("Creating ownership history for vehicle registration ID {}", vehicleId);
 
-        historyRepository.save(history);
+        vehicleOwnershipHistoryRepository.save(history);
         vehicleRegistration.getOwnershipHistory().add(history);
+        logger.info("Ownership history saved and added to vehicle registration with ID {}", vehicleId);
 
         vehicleRegistration.setOwnerName(newOwnerName);
         vehicleRegistration.setOwnerSurname(newOwnerSurname);
         vehicleRegistration.setOwnerLegalName(newOwnerLegalName);
         vehicleRegistration.setOwnerCode(newOwnerCode);
-        return repository.save(vehicleRegistration);
+        VehicleRegistration updatedVehicleRegistration = vehicleRegistrationRepository.save(vehicleRegistration);
+        logger.info("Vehicle ownership transferred successfully for vehicle registration ID: {} to new owner: {} {}",
+                updatedVehicleRegistration.getId(), updatedVehicleRegistration.getOwnerName(), updatedVehicleRegistration.getOwnerSurname());
+        return updatedVehicleRegistration;
     }
 
-    public VehicleRegistration delete(Long vehicleId) {
-        Optional<VehicleRegistration> vehicle = repository.findByIdAndIsDeletedFalse(vehicleId);
+    public VehicleRegistration deleteVehicleRegistration(Long vehicleId) {
+        logger.info("Starting deletion process for vehicle registration with ID: {}", vehicleId);
+        VehicleRegistration vehicleRegistration = vehicleRegistrationRepository.findVehicleRegistrationByIdAndIsDeletedFalse(vehicleId)
+                .orElseThrow(() -> {
+                    logger.error("Vehicle registration with ID {} not found for deletion", vehicleId);
+                    return new VehicleNotFoundException(String.format(VEHICLE_NOT_FOUND, vehicleId));
+                });
 
-        if (vehicle.isEmpty()) {
-            throw new VehicleNotFoundException(String.format(VEHICLE_NOT_FOUND, vehicleId));
-        }
-
-        VehicleRegistration vehicleRegistration = vehicle.get();
+        logger.info("Vehicle registration with ID {} found. Marking as deleted.", vehicleId);
         vehicleRegistration.setDeleted(true);
-        return repository.save(vehicleRegistration);
+        VehicleRegistration deletedVehicleRegistration = vehicleRegistrationRepository.save(vehicleRegistration);
+        logger.info("Vehicle registration with ID {} successfully marked as deleted", deletedVehicleRegistration.getId());
+        return deletedVehicleRegistration;
     }
 }

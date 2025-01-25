@@ -2,8 +2,8 @@ package lt.transport.registration.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
-import lt.transport.registration.DTO.TransferOwnerRequest;
-import lt.transport.registration.DTO.VehicleRegistrationRequest;
+import lt.transport.registration.dto.TransferOwnerRequest;
+import lt.transport.registration.dto.VehicleRegistrationRequest;
 import lt.transport.registration.entity.VehicleOwnershipHistory;
 import lt.transport.registration.entity.VehicleRegistration;
 import lt.transport.registration.mapper.VehicleRegistrationMapper;
@@ -26,9 +26,24 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 import java.util.Optional;
 
-import static lt.transport.registration.constants.ResponseMessages.*;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static lt.transport.registration.constants.ResponseMessages.MAKE_IS_REQUIRED;
+import static lt.transport.registration.constants.ResponseMessages.MODEL_IS_REQUIRED;
+import static lt.transport.registration.constants.ResponseMessages.OWNER_CODE_IS_REQUIRED;
+import static lt.transport.registration.constants.ResponseMessages.OWNER_NAME_IS_REQUIRED;
+import static lt.transport.registration.constants.ResponseMessages.OWNER_SURNAME_IS_REQUIRED;
+import static lt.transport.registration.constants.ResponseMessages.PLATE_NO_ALREADY_EXISTS;
+import static lt.transport.registration.constants.ResponseMessages.PLATE_NO_IS_REQUIRED;
+import static lt.transport.registration.constants.ResponseMessages.VEHICLE_DELETED;
+import static lt.transport.registration.constants.ResponseMessages.VEHICLE_NOT_FOUND;
+import static lt.transport.registration.constants.ResponseMessages.VEHICLE_OWNER_TRANSFERRED;
+import static lt.transport.registration.constants.ResponseMessages.VEHICLE_REGISTERED_SUCCESSFULLY;
+import static lt.transport.registration.constants.ResponseMessages.YEAR_IS_REQUIRED;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -88,10 +103,11 @@ public class VehicleRegistrationControllerIntegrationTest {
     @Test
     public void testRegisterVehicle_withUniquePlateNo_shouldSuccess() throws Exception {
         VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        repository.save(VehicleRegistrationMapper.toEntity(vehicleRegistrationRequest));
+        repository.save(VehicleRegistrationMapper.INSTANCE.toEntity(vehicleRegistrationRequest));
 
-        vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setPlateNo("BCD123");
+        vehicleRegistrationRequest = new VehicleRegistrationRequest("BCD123",
+                "Toyota", "Corolla", 2020, "Jonas", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -107,202 +123,211 @@ public class VehicleRegistrationControllerIntegrationTest {
     @Test
     public void testRegisterVehicle_withDuplicatedPlateNo_shouldReturnBadRequest() throws Exception {
         VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        repository.save(VehicleRegistrationMapper.toEntity(vehicleRegistrationRequest));
+        repository.save(VehicleRegistrationMapper.INSTANCE.toEntity(vehicleRegistrationRequest));
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(PLATE_NO_ALREADY_EXISTS));
+                .andExpect(jsonPath("$.message").value(PLATE_NO_ALREADY_EXISTS))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.existsById(1L));
     }
 
-//    @Test
-//    public void testRegisterVehicle_withRequestBodyNull_shouldReturnBadRequest() throws Exception {
-//        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-//        vehicleRegistrationRequest.setPlateNo(null);
-//
-//        mockMvc.perform(post("/vehicles/register")
-//                        .contentType(MediaType.APPLICATION_JSON)
-//                        .content((String) null)
-//                )
-//                .andExpect(status().isBadRequest())
-//                .andExpect(jsonPath("$").value(REQUEST_BODY_CANNOT_BE_NULL));
-//
-//        assertTrue(repository.findAll().isEmpty());
-//    }
-
     @Test
     public void testRegisterVehicle_withPlateNoNull_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setPlateNo(null);
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest(null,
+                "Toyota", "Corolla", 2020, "Jonas", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(PLATE_NO_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(PLATE_NO_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withPlateNoEmpty_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setPlateNo("");
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("",
+                "Toyota", "Corolla", 2020, "Jonas", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(PLATE_NO_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(PLATE_NO_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withMakeNull_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setMake(null);
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                null, "Corolla", 2020, "Jonas", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(MAKE_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(MAKE_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withMakeEmpty_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setMake("");
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "", "Corolla", 2020, "Jonas", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(MAKE_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(MAKE_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withModelNull_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setModel(null);
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", null, 2020, "Jonas", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(MODEL_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(MODEL_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withModelEmpty_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setModel("");
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", "", 2020, "Jonas", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(MODEL_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(MODEL_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withYearNull_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setYear(null);
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", "Corolla", null, "Jonas", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(YEAR_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(YEAR_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withOwnerNameNull_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setOwnerName(null);
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", "Corolla", 2020, null, "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(OWNER_NAME_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_NAME_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withOwnerNameEmpty_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setOwnerName("");
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", "Corolla", 2020, "", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(OWNER_NAME_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_NAME_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withOwnerSurnameNull_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setOwnerSurname(null);
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", "Corolla", 2020, "Jonas", null,
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(OWNER_SURNAME_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_SURNAME_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withOwnerSurnameEmpty_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setOwnerSurname("");
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", "Corolla", 2020, "Jonas", "",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(OWNER_SURNAME_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_SURNAME_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withOwnerLegalNameNull_shouldReturnSuccess() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setOwnerLegalName(null);
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", "Corolla", 2020, "Jonas", "Petrauskas",
+                null, "39601010000");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -317,38 +342,40 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Test
     public void testRegisterVehicle_withOwnerCodeNull_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setOwnerCode(null);
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", "Corolla", 2020, "Jonas", "Petrauskas",
+                null, null);
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(
-                        OWNER_CODE_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_CODE_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
     public void testRegisterVehicle_withOwnerCodeEmpty_shouldReturnBadRequest() throws Exception {
-        VehicleRegistrationRequest vehicleRegistrationRequest = TestDataUtil.getNaturalPersonVehicleRegistrationRequest();
-        vehicleRegistrationRequest.setOwnerCode("");
+        VehicleRegistrationRequest vehicleRegistrationRequest = new VehicleRegistrationRequest("ABC123",
+                "Toyota", "Corolla", 2020, "Jonas", "Petrauskas",
+                null, "");
 
         mockMvc.perform(post("/vehicles/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(vehicleRegistrationRequest))
                 )
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(
-                        OWNER_CODE_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_CODE_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
-    void testGetById() throws Exception {
+    void testGetVehicleRegistrationById() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
@@ -388,16 +415,17 @@ public class VehicleRegistrationControllerIntegrationTest {
     }
 
     @Test
-    void testGetByIdNotFound() throws Exception {
+    void testGetVehicleRegistrationByIdNotFound() throws Exception {
         mockMvc.perform(get("/vehicles/1"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$").value(String.format(VEHICLE_NOT_FOUND, 1)));
+                .andExpect(jsonPath("$.message").value(String.format(VEHICLE_NOT_FOUND, 1)))
+                .andExpect(jsonPath("$.statusCode").value(404));
 
         assertTrue(repository.findAll().isEmpty());
     }
 
     @Test
-    void testGetAll() throws Exception {
+    void testGetAllVehicleRegistrations() throws Exception {
         VehicleRegistration vehicleRegistration1 = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration1.setId(null);
         VehicleRegistration vehicleRegistration2 = TestDataUtil.getLegalEntityVehicleRegistration();
@@ -455,7 +483,7 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Test
     @Transactional
-    void testTransferOwner() throws Exception {
+    void testTransferOwnerOfVehicleRegistration() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
         TransferOwnerRequest transferOwnerRequest = TestDataUtil.getNewOwner();
@@ -492,19 +520,19 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Transactional
     @Test
-    void testTransferOwner_withNewOwnerNameNull_shouldReturnBadRequest2() throws Exception {
+    void testTransferOwner_withNewOwnerOfVehicleRegistrationNameNull_shouldReturnBadRequest2() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
-        TransferOwnerRequest transferOwnerRequest = TestDataUtil.getNewOwner();
-        transferOwnerRequest.setNewOwnerName(null);
+        TransferOwnerRequest transferOwnerRequest = new TransferOwnerRequest(
+                null, "Petraitis", "UAB Petras", "39601010000");
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
 
         mockMvc.perform(post("/vehicles/{vehicleId}/transfer-owner", savedVehicle.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(transferOwnerRequest)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(
-                        OWNER_NAME_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_NAME_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertEquals(1, repository.findAll().size());
         Optional<VehicleRegistration> vehicleRegistrationOptional = repository.findById(savedVehicle.getId());
@@ -526,19 +554,19 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Transactional
     @Test
-    void testTransferOwner_withNewOwnerNameEmpty_shouldReturnBadRequest() throws Exception {
+    void testTransferOwner_withNewOwnerOfVehicleRegistrationNameEmpty_shouldReturnBadRequest() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
-        TransferOwnerRequest transferOwnerRequest = TestDataUtil.getNewOwner();
-        transferOwnerRequest.setNewOwnerName("");
+        TransferOwnerRequest transferOwnerRequest = new TransferOwnerRequest(
+                "", "Petraitis", "UAB Petras", "39601010000");
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
 
         mockMvc.perform(post("/vehicles/{vehicleId}/transfer-owner", savedVehicle.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(transferOwnerRequest)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(
-                        OWNER_NAME_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_NAME_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertEquals(1, repository.findAll().size());
         Optional<VehicleRegistration> vehicleRegistrationOptional = repository.findById(savedVehicle.getId());
@@ -560,19 +588,19 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Transactional
     @Test
-    void testTransferOwner_withNewOwnerSurnameNull_shouldReturnBadRequest() throws Exception {
+    void testTransferOwner_withNewOwnerOfVehicleRegistrationSurnameNull_shouldReturnBadRequest() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
-        TransferOwnerRequest transferOwnerRequest = TestDataUtil.getNewOwner();
-        transferOwnerRequest.setNewOwnerSurname(null);
+        TransferOwnerRequest transferOwnerRequest = new TransferOwnerRequest(
+                "Petras", null, "UAB Petras", "39601010000");
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
 
         mockMvc.perform(post("/vehicles/{vehicleId}/transfer-owner", savedVehicle.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(transferOwnerRequest)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(
-                        OWNER_SURNAME_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_SURNAME_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertEquals(1, repository.findAll().size());
         Optional<VehicleRegistration> vehicleRegistrationOptional = repository.findById(savedVehicle.getId());
@@ -594,19 +622,19 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Transactional
     @Test
-    void testTransferOwner_withNewOwnerSurnameEmpty_shouldReturnBadRequest() throws Exception {
+    void testTransferOwner_withNewOwnerOfVehicleRegistrationSurnameEmpty_shouldReturnBadRequest() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
-        TransferOwnerRequest transferOwnerRequest = TestDataUtil.getNewOwner();
-        transferOwnerRequest.setNewOwnerSurname("");
+        TransferOwnerRequest transferOwnerRequest = new TransferOwnerRequest(
+                "Petras", "", "UAB Petras", "39601010000");
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
 
         mockMvc.perform(post("/vehicles/{vehicleId}/transfer-owner", savedVehicle.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(transferOwnerRequest)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(
-                        OWNER_SURNAME_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_SURNAME_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertEquals(1, repository.findAll().size());
         Optional<VehicleRegistration> vehicleRegistrationOptional = repository.findById(savedVehicle.getId());
@@ -628,11 +656,11 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Test
     @Transactional
-    void testTransferOwner_withNewOwnerLegalNameNull_shouldSuccess() throws Exception {
+    void testTransferOwner_withNewOwnerOfVehicleRegistrationLegalNameNull_shouldSuccess() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
-        TransferOwnerRequest transferOwnerRequest = TestDataUtil.getNewOwner();
-        transferOwnerRequest.setNewOwnerLegalName(null);
+        TransferOwnerRequest transferOwnerRequest = new TransferOwnerRequest(
+                "Petras", "Petraitis", null, "39601010000");
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
 
         mockMvc.perform(post("/vehicles/{vehicleId}/transfer-owner", savedVehicle.getId())
@@ -667,19 +695,19 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Transactional
     @Test
-    void testTransferOwner_withNewOwnerCodeNull_shouldReturnBadRequest2() throws Exception {
+    void testTransferOwner_withNewOwnerOfVehicleRegistrationCodeNull_shouldReturnBadRequest2() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
-        TransferOwnerRequest transferOwnerRequest = TestDataUtil.getNewOwner();
-        transferOwnerRequest.setNewOwnerCode(null);
+        TransferOwnerRequest transferOwnerRequest = new TransferOwnerRequest(
+                "Petras", "Petraitis", "UAB Petras", null);
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
 
         mockMvc.perform(post("/vehicles/{vehicleId}/transfer-owner", savedVehicle.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(transferOwnerRequest)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(
-                        OWNER_CODE_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_CODE_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertEquals(1, repository.findAll().size());
         Optional<VehicleRegistration> vehicleRegistrationOptional = repository.findById(savedVehicle.getId());
@@ -701,19 +729,19 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Transactional
     @Test
-    void testTransferOwner_withNewOwnerCodeEmpty_shouldReturnBadRequest() throws Exception {
+    void testTransferOwner_withNewOwnerOfVehicleRegistrationCodeEmpty_shouldReturnBadRequest() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
-        TransferOwnerRequest transferOwnerRequest = TestDataUtil.getNewOwner();
-        transferOwnerRequest.setNewOwnerCode("");
+        TransferOwnerRequest transferOwnerRequest = new TransferOwnerRequest(
+                "Petras", "Petraitis", "UAB Petras", "");
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
 
         mockMvc.perform(post("/vehicles/{vehicleId}/transfer-owner", savedVehicle.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(transferOwnerRequest)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$").value(
-                        OWNER_CODE_IS_REQUIRED));
+                .andExpect(jsonPath("$.message").value(OWNER_CODE_IS_REQUIRED))
+                .andExpect(jsonPath("$.statusCode").value(400));
 
         assertEquals(1, repository.findAll().size());
         Optional<VehicleRegistration> vehicleRegistrationOptional = repository.findById(savedVehicle.getId());
@@ -735,21 +763,21 @@ public class VehicleRegistrationControllerIntegrationTest {
 
     @Transactional
     @Test
-    void testTransferOwner_withNoVehicleRegistration_shouldReturnNotFound() throws Exception {
+    void testTransferOwner_OfVehicleRegistration_withNoVehicleRegistration_shouldReturnNotFound() throws Exception {
         TransferOwnerRequest transferOwnerRequest = TestDataUtil.getNewOwner();
 
         mockMvc.perform(post("/vehicles/{vehicleId}/transfer-owner", 1)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(transferOwnerRequest)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$").value(
-                        String.format(VEHICLE_NOT_FOUND, 1)));
+                .andExpect(jsonPath("$.message").value(String.format(VEHICLE_NOT_FOUND, 1)))
+                .andExpect(jsonPath("$.statusCode").value(404));
 
         assertEquals(0, repository.findAll().size());
     }
 
     @Test
-    void testDelete() throws Exception {
+    void testDeleteVehicleRegistration() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
@@ -778,17 +806,18 @@ public class VehicleRegistrationControllerIntegrationTest {
     }
 
     @Test
-    void testDelete_withNotSavedVehicleRegistration_shouldReturnNotFound() throws Exception {
+    void testDelete_VehicleRegistration_withNotSavedVehicleRegistration_shouldReturnNotFound() throws Exception {
         mockMvc.perform(delete("/vehicles/{vehicleId}", 1)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$").value(String.format(VEHICLE_NOT_FOUND, 1)));
+                .andExpect(jsonPath("$.message").value(String.format(VEHICLE_NOT_FOUND, 1)))
+                .andExpect(jsonPath("$.statusCode").value(404));
 
         assertEquals(0, repository.findAll().size());
     }
 
     @Test
-    void testDeleteAndGetById() throws Exception {
+    void testDeleteVehicleRegistrationAndGetVehicleRegistrationById() throws Exception {
         VehicleRegistration vehicleRegistration = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration.setId(null);
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration);
@@ -802,7 +831,8 @@ public class VehicleRegistrationControllerIntegrationTest {
         mockMvc.perform(get("/vehicles/{vehicleId}", savedVehicle.getId())
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$").value(String.format(VEHICLE_NOT_FOUND, 1)));
+                .andExpect(jsonPath("$.message").value(String.format(VEHICLE_NOT_FOUND, 1)))
+                .andExpect(jsonPath("$.statusCode").value(404));
 
         assertEquals(1, repository.findAll().size());
         Optional<VehicleRegistration> deletedVehicleRegistrationOptional = repository.findById(1L);
@@ -822,7 +852,7 @@ public class VehicleRegistrationControllerIntegrationTest {
     }
 
     @Test
-    void testDeleteAndGetAll() throws Exception {
+    void testDeleteVehicleRegistrationAndGetAllVehicleRegistrations() throws Exception {
         VehicleRegistration vehicleRegistration1 = TestDataUtil.getNaturalPersonVehicleRegistration();
         vehicleRegistration1.setId(null);
         VehicleRegistration savedVehicle = repository.save(vehicleRegistration1);
